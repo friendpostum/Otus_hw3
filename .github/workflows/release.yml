@@ -38,7 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./ip_filter
-          asset_name: ip_filter
+          asset_path: ./allocators
+          asset_name: allocators
           asset_content_type: application/vnd.debian.binary-package
 

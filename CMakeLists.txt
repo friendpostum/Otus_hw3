@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
-project(hw3)
+project(allocators)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(hw3 main.cpp)
+add_executable(${PROJECT_NAME} main.cpp)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 
