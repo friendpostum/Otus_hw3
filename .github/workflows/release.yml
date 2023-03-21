@@ -1,4 +1,4 @@
-name: 'Ip filter'
+name: 'Allocators'
 
 on:
   workflow_dispatch:
