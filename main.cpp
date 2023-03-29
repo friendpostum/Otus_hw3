@@ -6,11 +6,11 @@ template<typename T, std::size_t capacity>
 struct alloc {
     using value_type = T;
     std::list<void *> pool;
-    std::size_t block_cap;
+    std::size_t block_cap = 0;
     std::size_t block_head = 0;
 
-    alloc() noexcept: block_cap(capacity) {
-        block_cap != 0 || (block_cap = 1);
+    alloc() {
+        static_assert(capacity > 0);
     }
 
     template<class U>
@@ -25,11 +25,9 @@ struct alloc {
     }
 
     T *allocate(std::size_t n) {
-        if(block_head + n > block_cap || block_head == 0) {
-            //std::cout << "allocate: [n = " << block_cap << "]" << std::endl;
-            auto mul = n / block_cap + 1;
-            pool.push_back(::operator new(mul * block_cap * sizeof(T)));
-            block_cap *= mul;
+        if(block_head + n > block_cap) {
+            block_cap = capacity + n / capacity;
+            pool.push_back(::operator new(block_cap * sizeof(T)));
             block_head = 0;
         }
         auto p = reinterpret_cast<T *>(pool.back()) + block_head;
@@ -161,7 +159,7 @@ int main() {
         list.push_back(i);
     }
 
-    MyList<int, alloc<int,1>> list_cust;
+    MyList<int, alloc<int, 10>> list_cust;
     for(int i = 0; i < 10; ++i) {
         list_cust.push_back(i);
     }
