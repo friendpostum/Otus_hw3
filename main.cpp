@@ -24,6 +24,7 @@ struct alloc {
         }
     }
 
+
     T *allocate(std::size_t n) {
         if(block_head + n > block_cap) {
             block_cap = capacity + n / capacity;
