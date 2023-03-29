@@ -5,11 +5,13 @@
 template<typename T, std::size_t capacity>
 struct alloc {
     using value_type = T;
-    std::list<void*> pool;
+    std::list<void *> pool;
     std::size_t block_cap;
     std::size_t block_head = 0;
 
-    alloc() noexcept : block_cap(capacity) {}
+    alloc() noexcept: block_cap(capacity) {
+        block_cap != 0 || (block_cap = 1);
+    }
 
     template<class U>
     explicit alloc(const alloc<U, capacity> &other) noexcept : pool(other.pool),
@@ -17,42 +19,32 @@ struct alloc {
                                                                block_head(other.block_head) {}
 
     ~alloc() {
-        for(auto const & p : pool){
-            ::operator delete(p, capacity*sizeof(T));
+        for(auto const &p: pool) {
+            ::operator delete(p);
         }
     }
 
-/*    T *allocate(std::size_t n) {
-        if(pool == nullptr) {
-            pool = ::operator new(block_cap * sizeof(T));
-            pool.push_back(pool);
-        }
-        if(block_head + n > block_cap) {
-            //throw std::bad_alloc();
-            pool = ::operator new(block_cap * sizeof(T));
-            pool.push_back(pool);
-            block_head = 0;
-        }
-    return reinterpret_cast<T *>(pool) + block_head++;
-    }*/
     T *allocate(std::size_t n) {
-        if(pool.empty()) {
-            pool.push_back(::operator new(block_cap * sizeof(T)));
-        }
-        if(block_head + n > block_cap) {
-            //throw std::bad_alloc();
-            pool.push_back(::operator new(block_cap * sizeof(T)));
+        if(block_head + n > block_cap || block_head == 0) {
+            //std::cout << "allocate: [n = " << block_cap << "]" << std::endl;
+            auto mul = n / block_cap + 1;
+            pool.push_back(::operator new(mul * block_cap * sizeof(T)));
+            block_cap *= mul;
             block_head = 0;
         }
-        return reinterpret_cast<T *>(pool.back()) + block_head++;
+        auto p = reinterpret_cast<T *>(pool.back()) + block_head;
+        block_head += n;
+        return p;
     }
-    void deallocate (T* p, std::size_t n){}
 
-    template <class Up, class... Args>
-    void construct(Up* p, Args&&... args) {
-        ::new ((void*)p) Up(std::forward<Args>(args)...);
+    void deallocate(T *p, std::size_t n) {}
+
+    template<class Up, class... Args>
+    void construct(Up *p, Args &&... args) {
+        ::new((void *) p) Up(std::forward<Args>(args)...);
     }
-    void destroy(T* p) {
+
+    void destroy(T *p) {
         p->~T();
     }
 
@@ -67,7 +59,7 @@ struct alloc {
 };
 
 template<class T, class U, std::size_t cap>
-constexpr bool operator==(const alloc<T, cap> &a1, const alloc<U,cap> &a2) noexcept {
+constexpr bool operator==(const alloc<T, cap> &a1, const alloc<U, cap> &a2) noexcept {
     return a1.pool == a2.pool;
 }
 
@@ -77,26 +69,31 @@ constexpr bool operator!=(const alloc<T, cap> &a1, const alloc<U, cap> &a2) noex
 }
 
 template<typename T, typename Allocator = std::allocator<T>>
-struct MyList{
+struct MyList {
     struct Node {
         using value_type = T;
         T val;
-        Node* next;
+        Node *next;
 
         explicit Node(T _val) : val(_val), next(nullptr) {}
     };
 
     MyList() : front(nullptr), back(nullptr) {}
 
+    ~MyList() {
+        while(!is_empty())
+            pop_front();
+    }
+
     bool is_empty() {
         return front == nullptr;
     }
 
     void push_back(T val) {
-        Node* p = nodeAlloc.allocate(1);
+        Node *p = nodeAlloc.allocate(1);
         nodeAlloc.construct(p, val);
 
-        if (is_empty()) {
+        if(is_empty()) {
             front = p;
             back = p;
             return;
@@ -106,65 +103,66 @@ struct MyList{
     }
 
     void pop_front() {
-        if (is_empty()) return;
-        Node* p = front;
+        if(is_empty()) return;
+        Node *p = front;
         front = p->next;
         nodeAlloc.destroy(p);
-        nodeAlloc.deallocate(p,sizeof(Node));
+        nodeAlloc.deallocate(p, sizeof(Node));
     }
 
     void pop_back() {
-        if (is_empty()) return;
-        if (front == back) {
+        if(is_empty()) return;
+        if(front == back) {
             pop_front();
             return;
         }
-        Node* p = front;
-        while (p->next != back) p = p->next;
+        Node *p = front;
+        while(p->next != back) p = p->next;
         p->next = nullptr;
-        nodeAlloc.destroy(p);
-        nodeAlloc.deallocate(p,sizeof(Node));
+        nodeAlloc.destroy(back);
+        nodeAlloc.deallocate(back, sizeof(Node));
         back = p;
     }
 
     void print() {
-        if (is_empty()) return;
-        Node* p = front;
-        while (p) {
+        if(is_empty()) return;
+        Node *p = front;
+        while(p) {
             std::cout << p->val << " ";
             p = p->next;
         }
         std::cout << std::endl;
     }
+
 private:
 
-    Node* front;
-    Node* back;
+    Node *front;
+    Node *back;
     typename std::allocator_traits<Allocator>::template rebind_alloc<Node> nodeAlloc;
 };
 
 int main() {
     std::map<int, int> map_std{{0, 1}};
-    for (int i = 1; i < 10; ++i) {
+    for(int i = 1; i < 10; ++i) {
         map_std[i] = map_std[i - 1] * i;
     }
 
     std::map<int, int, std::less<>, alloc<std::pair<const int, int>, 10>> map_cust{{0, 1}};
-    for (int i = 1; i < 10; ++i) {
+    for(int i = 1; i < 10; ++i) {
         map_cust[i] = map_cust[i - 1] * i;
     }
 
-    for (const auto &[f, s]: map_cust) {
+    for(const auto &[f, s]: map_cust) {
         std::cout << f << ' ' << s << std::endl;
     }
 
     MyList<int> list;
-    for (int i = 0; i < 10; ++i) {
+    for(int i = 0; i < 10; ++i) {
         list.push_back(i);
     }
 
-    MyList<int, alloc<int, 10>> list_cust;
-    for (int i = 0; i < 10; ++i) {
+    MyList<int, alloc<int,1>> list_cust;
+    for(int i = 0; i < 10; ++i) {
         list_cust.push_back(i);
     }
     list_cust.print();
